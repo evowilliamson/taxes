@@ -1,0 +1,94 @@
+1. creating extra trades
+I want you to generate a script that converts the original trade to two separate trades in case where both the buy and 
+sell side of a trade are non-USD currencies.
+
+The two separate trades I define here:
+The first trade is the sell trade.
+The second trade is the buy trade.
+
+For example, take the following example:
+
+time	sell_asset_usd	sell_amount_usd	buy_asset_usd	buy_amount_usd	buy_usd_price	sell_usd_price	split	chck	
+03/20/2023	EUR	3551.5151	PAXG	1.88567281	1.0718	2018.650247	TRUE	FALSE
+
+In this case, EUR to PAXG are both non-USD currencies. You can check the "split" column for this. If this column is TRUE, 
+you know that both have non-USD currencies. 
+ 
+For this trade the following two separate trades should be created:
+
+time	sell_asset_usd	sell_amount_usd	buy_asset_usd	buy_amount_usd	buy_usd_price	sell_usd_price	split	chck
+03/20/2023	EUR	3551.5151	USD	$(buy_usd_price)*$(sell_amount_usd)	NULL	NULL	NULL	NULL
+03/20/2023	USD	$(buy_usd_price)*$(sell_amount_usd)	PAXG	$(buy_amount_usd)	NULL	NULL	NULL	NULL
+
+Where I am using variables in the row values to indicate which header column should be used.
+
+For the first trade, the sell trade: 
+	- the columns time, sell_asset_usd, sell_amount_usd you can copy from the original trade
+	- the column buy_asset_usd will be "USD"
+	- the buy_amount_usd column will get the value $(buy_usd_price)*$(sell_amount_usd) from the original trade
+
+For the second trade, the buy trade:
+	- the columns time and buy_asset_usd you can copy from the original trade
+	- the column sell_asset_usd will be "USD"
+	- the column sell_amount_usd will get the value $(buy_usd_price)*$(sell_amount_usd)
+	- the column buy_amount_usd will get the value $(buy_amount_usd)
+
+Please generate the python script
+
+
+
+I want you to generate a script that will calculate my capital gains for my trades that I did in 2023. I have some trades in 2022 that influence the fiscal year 2023. 
+So the data that you will receive will contains both data for 2022 and 2023.
+
+I want you to use the FIFO method
+
+I don't have a timestamp, only a date, but there is chronological order, so trades that come after another trade were done later.
+
+I will give you the following format. I also give you some example trades:
+
+id	time	source_currency	source_amount	buy_currency	buy_amount	profit	matched_with_id
+1	03/20/2023	EUR	3551.5151	USD	3806.513884		
+2	03/20/2023	USD	3806.513884	PAXG	1.88567281		
+3	03/20/2023	EUR	1410.1474	USD	1511.395983		
+4	03/20/2023	USD	1511.395983	PAXG	0.74848589		
+
+If there is a profit for a certain trade (let's call it the "profit trade"), I want you to fill out the profit in the 
+profit column. If there is a profit, I want you to fill out the matched_with_i column in the "profit trade" with the id of the trade with
+which it was matched according to the FIFO rules. 
+
+If there is a loss, don't fill out the profit column, but you do need to decrease the inventory. You also need to fill out the matched trade id.
+
+The script will receive an input trades file named input_trades_for_taxes.tsv
+
+Make sure that you set the correct date formatting settings because we had some errors before when handling dates.
+
+Use the following initial inventory:
+My balance at 1/1/2022	
+EUR	500000
+USD	500000
+
+Please generate the script
+
+Please confirm that you understood
+
+
+
+
+
+
+This is my XMR purchase (it's in the input file):
+
+id	time	source_currency	source_amount	buy_currency	buy_amount
+1	03/17/2022	USD	40000	XMR	1333.333333
+
+Here is when I sell it:
+
+id	time	source_currency	source_amount	buy_currency	buy_amount
+29	11/09/2023	XMR	15.00000001	USD	1920.766603
+
+I definitely make a profit. Please revise the script if you see some errors
+
+
+
+
+
