@@ -1,90 +1,69 @@
-import pandas as pd
-from datetime import datetime, timedelta
+import csv
+from datetime import datetime
+import sys
 
-# Initial inventory
-initial_inventory = {
-    "EUR": 0,
-    "USD": 0,
-    "BTC": 0,
-    "ETH": 0,
-    "LTC": 0,
-    "PAXG": 0,
-}
+# Define the list of currencies for processing
+currency_list = ["ETH", "MSOL", "SOL", "BTC"]
 
-# Currencies of interest
-currencies_of_interest = ["EUR", "USD", "BTC", "ETH", "LTC", "PAXG"]
+def process_trade_file(input_file, output_file, platform):
+    ignored_trades = []
+    output_trades = []
 
-# Function to calculate inventory over time
-def calculate_inventory(input_file, output_file):
-    # Read the input file
-    trades = pd.read_csv(input_file, sep="\t")
+    # Read the trade file
+    with open(input_file, 'r') as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        trades = list(reader)
 
-    # Convert date_time to datetime and sort by it
-    trades['date_time'] = pd.to_datetime(trades['date_time'])
-    trades.sort_values('date_time', inplace=True)
+    # Process each trade
+    for trade in trades:
+        from_currency = trade['source_currency']
+        to_currency = trade['target_currency']
 
-    # Create a DataFrame for inventory tracking
-    start_date = trades['date_time'].min().date()
-    end_date = trades['date_time'].max().date()
-    date_range = pd.date_range(start=start_date, end=end_date)
+        # Replace currencies based on rules
+        for currency in currency_list:
+            if currency != "SOL":
+                if currency in to_currency:
+                    to_currency = currency
+                if currency in from_currency:
+                    from_currency = currency
+            else:
+                if "SOL" in to_currency and "MSOL" not in to_currency:
+                    to_currency = "SOL"
+                if "SOL" in from_currency and "MSOL" not in from_currency:
+                    from_currency = "SOL"
 
-    inventory = pd.DataFrame(index=date_range, columns=currencies_of_interest, dtype=float)
+        # Update the trade with replaced currencies
+        trade['source_currency'] = from_currency
+        trade['target_currency'] = to_currency
 
-    # Initialize inventory with the initial values
-    for currency, amount in initial_inventory.items():
-        inventory.loc[inventory.index[0], currency] = amount
+        # Classify the trade
+        if from_currency == to_currency:
+            ignored_trades.append(trade)
+        else:
+            output_trades.append(trade)
 
-    # Process trades
-    for _, trade in trades.iterrows():
-        trade_date = pd.Timestamp(trade['date_time'].date())  # Ensure consistent type with inventory index
-        source_currency = trade['source_currency']
-        source_amount = trade['source_amount']
-        target_currency = trade['target_currency']
-        target_amount = trade['target_amount']
+    # Sort output trades by date_time
+    output_trades.sort(key=lambda x: datetime.strptime(x['date_time'], '%Y/%m/%d %H:%M:%S'))
 
-        # Update inventory for the specific trade date
-        if source_currency in inventory.columns:
-            inventory.loc[trade_date, source_currency] -= source_amount
+    # Write ignored trades to <platform>_ignored.tsv
+    with open(f"{platform}_ignored.tsv", 'w', newline='') as ignored_file:
+        writer = csv.DictWriter(ignored_file, fieldnames=trades[0].keys(), delimiter='\t')
+        writer.writeheader()
+        writer.writerows(ignored_trades)
 
-        if target_currency in inventory.columns:
-            inventory.loc[trade_date, target_currency] += target_amount
+    # Write output trades to the specified output file
+    with open(output_file, 'w', newline='') as output_file:
+        writer = csv.DictWriter(output_file, fieldnames=trades[0].keys(), delimiter='\t')
+        writer.writeheader()
+        writer.writerows(output_trades)
 
-        # Propagate the inventory forward to the next days
-        if trade_date != inventory.index[-1]:  # Ensure not to propagate past the last day
-            for col in inventory.columns:
-                inventory.loc[trade_date + timedelta(days=1):, col] = inventory.loc[trade_date, col]
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print("Usage: python Remove_wrapped_coins.py <input_file> <output_file> <platform>")
+        sys.exit(1)
 
-    # Add columns for the highest and lowest inventory levels and their dates
-    peak_data = {
-        "Currency": [],
-        "Highest Inventory": [],
-        "Highest Date": [],
-        "Lowest Inventory": [],
-        "Lowest Date": []
-    }
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    platform = sys.argv[3]
 
-    for currency in currencies_of_interest:
-        peak_data["Currency"].append(currency)
-        peak_data["Highest Inventory"].append(inventory[currency].max())
-        peak_data["Highest Date"].append(inventory[currency].idxmax().strftime('%Y-%m-%d'))
-        peak_data["Lowest Inventory"].append(inventory[currency].min())
-        peak_data["Lowest Date"].append(inventory[currency].idxmin().strftime('%Y-%m-%d'))
-
-    # Save inventory to file
-    inventory.reset_index(inplace=True)
-    inventory.rename(columns={"index": "date"}, inplace=True)
-    inventory.to_csv(output_file, sep="\t", index=False)
-
-    # Print peak information
-    peak_df = pd.DataFrame(peak_data)
-
-    # Format to avoid scientific notation
-    pd.set_option('display.float_format', '{:.6f}'.format)
-
-    print("Peak Inventory Data:")
-    print(peak_df)
-
-# Example usage
-input_file = "trades_input.tsv"  # Replace with your input file
-output_file = "inventory_output.tsv"  # Replace with your desired output file
-calculate_inventory(input_file, output_file)
+    process_trade_file(input_file, output_file, platform)
