@@ -1,5 +1,7 @@
 from collections import defaultdict, deque
 import csv
+import os
+from datetime import datetime
 
 def process_trades(input_file, output_file): 
     # Initialize dictionaries for purchases and sales
@@ -11,7 +13,7 @@ def process_trades(input_file, output_file):
         reader = csv.DictReader(infile, delimiter='\t')
         for row in reader:
             trade_id = int(row['id'])
-            date = row['time']
+            date = row['date_time']
             source_currency = row['source_currency']
             source_amount = float(row['source_amount'])
             target_currency = row['target_currency']
@@ -42,13 +44,17 @@ def process_trades(input_file, output_file):
 
         for sale in sales_list:
             while sale['amount'] > 0:
+                # Remove future purchases that occur after the sale date
+                while purchase_deque and purchase_deque[0]['date'] > sale['date']:
+                    purchase_deque.popleft()
+
                 if not purchase_deque:
                     # Log error and stop execution
                     raise RuntimeError(
                         f"Error: Insufficient inventory for currency {currency}. Unable to match sale ID {sale['id']}. Program stopped."
                     )
 
-                purchase = purchase_deque[0]  # Inspect the first purchase without removing it
+                purchase = purchase_deque[0]  # Inspect the first eligible purchase without removing it
 
                 if purchase['amount'] < sale['amount']:
                     # Partial match: purchase amount is less than sale amount
@@ -106,8 +112,11 @@ def write_output(input_file, output_file, sales):
             writer.writerow(row)
 
 if __name__ == "__main__":
-    input_file = "input_trades_for_taxes.tsv"  # Replace with your input file path
-    output_file = "output_trades_for_taxes.tsv"  # Replace with your desired output file path
+    input_dir = "data_files"
+    output_dir = "output_files"
+    input_file = os.path.join(input_dir, "splitted.tsv")
+    output_file = os.path.join(output_dir, "output_trades_for_taxes.tsv")
+    
     try:
         sales = process_trades(input_file, output_file)
         write_output(input_file, output_file, sales)
