@@ -2,7 +2,7 @@ from collections import defaultdict, deque
 import csv
 import os
 from datetime import datetime
-#from decimal import float
+from decimal import Decimal
 
 def process_trades(input_file, output_file):
     # Initialize dictionaries for purchases and sales
@@ -16,9 +16,9 @@ def process_trades(input_file, output_file):
             trade_id = int(row['id'])
             date = row['date_time']
             source_currency = row['source_currency']
-            source_amount = float(row['source_amount'])
+            source_amount = Decimal(row['source_amount'])
             target_currency = row['target_currency']
-            target_amount = float(row['target_amount'])
+            target_amount = Decimal(row['target_amount'])
 
             if source_currency == "USD" and target_currency != "USD":
                 # It's a purchase
@@ -35,7 +35,7 @@ def process_trades(input_file, output_file):
                     "date": date,
                     "usd_received": target_amount,
                     "amount": source_amount,
-                    "profit": float('0.00'),
+                    "profit": Decimal('0.00'),
                     "matched_with_ids": [],
                     "unmatched_amount": ""
                 })
@@ -48,8 +48,8 @@ def process_trades(input_file, output_file):
             while sale['amount'] > 0:
                 if not purchase_deque:
                     # Mark sale as unmatched
-                    sale['unmatched_amount'] = str(sale['amount'])
-                    print(f"Unmatched sale: Amount {sale['amount']} {currency}, Trade ID {sale['id']}")
+                    sale['unmatched_amount'] = sale['amount']
+                    print(f"Unmatched sale: Amount {sale['amount']} {currency} Trade ID {sale['id']} Date {sale['date']} ")
                     break
 
                 purchase = purchase_deque[0]  # Peek at the earliest purchase
@@ -77,14 +77,15 @@ def process_trades(input_file, output_file):
 
                         sale['profit'] += sale['usd_received'] - usd_paid_purchase
                         sale['matched_with_ids'].append(purchase['id'])
-                        sale['amount'] = float('0.00')  # Sale fully matched
+                        sale['amount'] = Decimal('0.00')  # Sale fully matched
 
                         sale['usd_received'] -= usd_received_sale  # This line should be included
 
-                        if purchase['amount'] == float('0.00'):
+                        if purchase['amount'] == Decimal('0.00'):
                             purchase_deque.popleft()  # Remove fully matched purchase
                 else:
                     # If the earliest purchase date is after the sale date, stop matching for this sale
+                    sale['unmatched_amount'] = sale['amount']
                     break
 
     return sales
