@@ -2,8 +2,9 @@ from collections import defaultdict, deque
 import csv
 import os
 from datetime import datetime
+#from decimal import float
 
-def process_trades(input_file, output_file): 
+def process_trades(input_file, output_file):
     # Initialize dictionaries for purchases and sales
     purchases = defaultdict(deque)
     sales = defaultdict(list)
@@ -18,7 +19,7 @@ def process_trades(input_file, output_file):
             source_amount = float(row['source_amount'])
             target_currency = row['target_currency']
             target_amount = float(row['target_amount'])
-            
+
             if source_currency == "USD" and target_currency != "USD":
                 # It's a purchase
                 purchases[target_currency].append({
@@ -34,8 +35,9 @@ def process_trades(input_file, output_file):
                     "date": date,
                     "usd_received": target_amount,
                     "amount": source_amount,
-                    "profit": 0,
-                    "matched_with_ids": []
+                    "profit": float('0.00'),
+                    "matched_with_ids": [],
+                    "unmatched_amount": ""
                 })
 
     # Step 2: Matching phase
@@ -44,41 +46,46 @@ def process_trades(input_file, output_file):
 
         for sale in sales_list:
             while sale['amount'] > 0:
-                # Remove future purchases that occur after the sale date
-                while purchase_deque and purchase_deque[0]['date'] > sale['date']:
-                    purchase_deque.popleft()
-
                 if not purchase_deque:
-                    # Log error and stop execution
-                    raise RuntimeError(
-                        f"Error: Insufficient inventory for currency {currency}. Unable to match sale ID {sale['id']}. Program stopped."
-                    )
+                    # Mark sale as unmatched
+                    sale['unmatched_amount'] = str(sale['amount'])
+                    print(f"Unmatched sale: Amount {sale['amount']} {currency}, Trade ID {sale['id']}")
+                    break
 
-                purchase = purchase_deque[0]  # Inspect the first eligible purchase without removing it
+                purchase = purchase_deque[0]  # Peek at the earliest purchase
 
-                if purchase['amount'] < sale['amount']:
-                    # Partial match: purchase amount is less than sale amount
-                    usd_received_sale = sale['usd_received'] * (purchase['amount'] / sale['amount'])
-                    sale['profit'] += usd_received_sale - purchase['usd_paid']
-                    sale['matched_with_ids'].append(purchase['id'])
-                    sale['usd_received'] -= usd_received_sale
-                    sale['amount'] -= purchase['amount']
-                    purchase_deque.popleft()  # Remove fully matched purchase
-                else:
-                    # Full match: purchase amount is greater than or equal to sale amount
-                    usd_paid_purchase = (sale['amount'] / purchase['amount']) * purchase['usd_paid']
-                    usd_received_sale = sale['usd_received']
-
-                    purchase['amount'] -= sale['amount']
-                    purchase['usd_paid'] -= usd_paid_purchase
-
-                    sale['profit'] += sale['usd_received'] - usd_paid_purchase
-                    sale['usd_received'] -= usd_received_sale
-                    sale['matched_with_ids'].append(purchase['id'])
-                    sale['amount'] = 0  # Sale fully matched
-
-                    if purchase['amount'] == 0:
+                if sale['date'] >= purchase['date']:
+                    # Proceed with matching logic (partial or full match)
+                    if purchase['amount'] < sale['amount']:
+                        # Partial match logic
                         purchase_deque.popleft()  # Remove fully matched purchase
+                        if not purchase_deque:
+                            usd_received_sale = sale['usd_received']
+                        else:
+                            usd_received_sale = sale['usd_received'] * (purchase['amount'] / sale['amount'])
+                        sale['profit'] += usd_received_sale - purchase['usd_paid']
+                        sale['matched_with_ids'].append(purchase['id'])
+                        sale['usd_received'] -= usd_received_sale
+                        sale['amount'] -= purchase['amount']
+                    else:
+                        # Full match logic
+                        usd_paid_purchase = (sale['amount'] / purchase['amount']) * purchase['usd_paid']
+                        usd_received_sale = sale['usd_received']
+
+                        purchase['amount'] -= sale['amount']
+                        purchase['usd_paid'] -= usd_paid_purchase
+
+                        sale['profit'] += sale['usd_received'] - usd_paid_purchase
+                        sale['matched_with_ids'].append(purchase['id'])
+                        sale['amount'] = float('0.00')  # Sale fully matched
+
+                        sale['usd_received'] -= usd_received_sale  # This line should be included
+
+                        if purchase['amount'] == float('0.00'):
+                            purchase_deque.popleft()  # Remove fully matched purchase
+                else:
+                    # If the earliest purchase date is after the sale date, stop matching for this sale
+                    break
 
     return sales
 
@@ -86,9 +93,9 @@ def write_output(input_file, output_file, sales):
     """Writes the processed trades to the output file."""
     with open(input_file, 'r') as infile, open(output_file, 'w', newline='') as outfile:
         reader = csv.DictReader(infile, delimiter='\t')  # Use tab as the delimiter
-        fieldnames = reader.fieldnames + ['profit', 'matched_with_ids']
+        fieldnames = reader.fieldnames + ['profit', 'matched_with_ids', 'unmatched_amount']
         writer = csv.DictWriter(outfile, fieldnames=fieldnames, delimiter='\t')  # Tab-separated output
-        
+
         writer.writeheader()
         for row in reader:
             # Ensure the row is valid
@@ -105,10 +112,12 @@ def write_output(input_file, output_file, sales):
                 if sale:
                     row['profit'] = round(sale['profit'], 2)
                     row['matched_with_ids'] = ';'.join(map(str, sale['matched_with_ids']))
+                    row['unmatched_amount'] = sale['unmatched_amount']
             else:
                 row['profit'] = ''
                 row['matched_with_ids'] = ''
-            
+                row['unmatched_amount'] = ''
+
             writer.writerow(row)
 
 if __name__ == "__main__":
@@ -116,7 +125,7 @@ if __name__ == "__main__":
     output_dir = "output_files"
     input_file = os.path.join(input_dir, "splitted.tsv")
     output_file = os.path.join(output_dir, "output_trades_for_taxes.tsv")
-    
+
     try:
         sales = process_trades(input_file, output_file)
         write_output(input_file, output_file, sales)
