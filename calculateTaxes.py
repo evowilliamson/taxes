@@ -44,9 +44,7 @@ def process_trades(input_file, output_file):
     for currency, sales_list in sales.items():
         purchase_deque = purchases.get(currency, None)
         for sale in sales_list:
-            print("looping sales...")
             while sale['amount'] > 0:
-                print("looping amount..." + str(sale['amount']) + " ID " + str(sale['id']))
                 purchase = purchase_deque[0] if purchase_deque else None  # Peek at the earliest purchase
                 if purchase and sale['date'] > purchase['date']:
                     # Proceed with matching logic (partial or full match)
@@ -67,13 +65,11 @@ def process_trades(input_file, output_file):
                         purchase['amount'] -= sale['amount']
                         purchase['usd_paid'] -= usd_paid_purchase
 
-                        sale['profit'] += sale['usd_received'] - usd_paid_purchase
+                        sale['profit'] += usd_received_sale - usd_paid_purchase
                         sale['matched_with_ids'].append(purchase['id'])
                         sale['usd_received'] -= usd_received_sale  # This line should be included
                         sale['amount'] = Decimal('0.00')  # Sale fully matched
-
-                        if purchase['amount'] == Decimal('0.00'):
-                            purchase_deque.popleft()  # Remove fully matched purchase
+                        purchase_deque.popleft() if purchase['amount'] == Decimal('0.00') else None
                 else:
                     # Mark sale as unmatched
                     sale['unmatched_amount'] = sale['amount']
@@ -97,7 +93,6 @@ def write_output(input_file, output_file, sales):
 
             trade_id = int(row['id'])
             source_currency = row['source_currency']
-            target_currency = row['target_currency']
 
             if source_currency != 'USD':  # It's a sale
                 sales_list = sales[source_currency]
