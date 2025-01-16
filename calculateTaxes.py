@@ -42,31 +42,23 @@ def process_trades(input_file, output_file):
 
     # Step 2: Matching phase
     for currency, sales_list in sales.items():
-        purchase_deque = purchases[currency]
-
+        purchase_deque = purchases.get(currency, None)
         for sale in sales_list:
+            print("looping sales...")
             while sale['amount'] > 0:
-                if not purchase_deque:
-                    # Mark sale as unmatched
-                    sale['unmatched_amount'] = sale['amount']
-                    print(f"Unmatched sale: Amount {sale['amount']} {currency} Trade ID {sale['id']} Date {sale['date']} ")
-                    break
-
-                purchase = purchase_deque[0]  # Peek at the earliest purchase
-
-                if sale['date'] >= purchase['date']:
+                print("looping amount..." + str(sale['amount']) + " ID " + str(sale['id']))
+                purchase = purchase_deque[0] if purchase_deque else None  # Peek at the earliest purchase
+                if purchase and sale['date'] > purchase['date']:
                     # Proceed with matching logic (partial or full match)
                     if purchase['amount'] < sale['amount']:
                         # Partial match logic
-                        purchase_deque.popleft()  # Remove fully matched purchase
-                        if not purchase_deque:
-                            usd_received_sale = sale['usd_received']
-                        else:
-                            usd_received_sale = sale['usd_received'] * (purchase['amount'] / sale['amount'])
+                        usd_received_sale = sale['usd_received'] * (purchase['amount'] / sale['amount'])
+
                         sale['profit'] += usd_received_sale - purchase['usd_paid']
                         sale['matched_with_ids'].append(purchase['id'])
                         sale['usd_received'] -= usd_received_sale
                         sale['amount'] -= purchase['amount']
+                        purchase_deque.popleft()
                     else:
                         # Full match logic
                         usd_paid_purchase = (sale['amount'] / purchase['amount']) * purchase['usd_paid']
@@ -77,17 +69,17 @@ def process_trades(input_file, output_file):
 
                         sale['profit'] += sale['usd_received'] - usd_paid_purchase
                         sale['matched_with_ids'].append(purchase['id'])
-                        sale['amount'] = Decimal('0.00')  # Sale fully matched
-
                         sale['usd_received'] -= usd_received_sale  # This line should be included
+                        sale['amount'] = Decimal('0.00')  # Sale fully matched
 
                         if purchase['amount'] == Decimal('0.00'):
                             purchase_deque.popleft()  # Remove fully matched purchase
                 else:
-                    # If the earliest purchase date is after the sale date, stop matching for this sale
+                    # Mark sale as unmatched
                     sale['unmatched_amount'] = sale['amount']
+                    sale['profit'] += sale['usd_received']
+                    print(f"Unmatched sale: Amount {sale['amount']} {currency} Trade ID {sale['id']} Date {sale['date']} ")
                     break
-
     return sales
 
 def write_output(input_file, output_file, sales):
