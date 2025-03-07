@@ -13,6 +13,7 @@ def process_trades(input_file, output_file):
     with open(input_file, 'r') as infile:
         reader = csv.DictReader(infile, delimiter='\t')
         for row in reader:
+            print(row['id'])
             trade_id = int(row['id'])
             date = row['date_time']
             source_currency = row['source_currency']
